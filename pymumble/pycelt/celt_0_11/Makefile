@@ -33,4 +33,4 @@ all : $(MOD_NAME).$(MOD_EXT)
 .PHONY : all
 
 clean :
-	rm -r $(CELT) build $(MOD_NAME).c $(MOD_NAME).pyd
+	rm -r $(CELT) build $(MOD_NAME).c $(MOD_NAME).$(MOD_EXT)

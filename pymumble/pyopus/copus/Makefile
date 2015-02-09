@@ -33,4 +33,4 @@ all : $(MOD_NAME).$(MOD_EXT)
 .PHONY : all
 
 clean :
-	rm -r $(OPUS) build $(MOD_NAME).c $(MOD_NAME).pyd
+	rm -r $(OPUS) build $(MOD_NAME).c $(MOD_NAME).$(MOD_EXT)
