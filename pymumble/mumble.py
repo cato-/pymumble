@@ -103,7 +103,9 @@ class Mumble(threading.Thread):
         while True:
             self.init_connection()  # reset the connection-specific object members
             
-            self.connect()
+            if self.connect() >= PYMUMBLE_CONN_STATE_FAILED: # some error occured, exit here
+                self.ready_lock.release()
+                break
             
             self.loop()
         
@@ -120,7 +122,23 @@ class Mumble(threading.Thread):
         std_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.control_socket = ssl.wrap_socket(std_sock, certfile=self.client_certif, ssl_version=ssl.PROTOCOL_TLSv1)
 
-        self.control_socket.connect((self.host, self.port))
+        try:
+            self.control_socket.connect((self.host, self.port))
+        except socket.gaierror as e:
+            self.connected = PYMUMBLE_CONN_STATE_FAILED
+            self.connection_error = e.args
+        except socket.herror as e:
+            self.connected = PYMUMBLE_CONN_STATE_FAILED
+            self.connection_error = e.args
+        except socket.error as e:
+            self.connected = PYMUMBLE_CONN_STATE_FAILED
+            self.connection_error = e.args
+        except Exception as e:
+            self.connected = PYMUMBLE_CONN_STATE_FAILED
+            self.connection_error = e.args
+
+        if self.connected == PYMUMBLE_CONN_STATE_FAILED:
+            return self.connected
         
         self.control_socket.setblocking(0)
         
@@ -143,6 +161,7 @@ class Mumble(threading.Thread):
         self.send_message(PYMUMBLE_MSG_TYPES_AUTHENTICATE, authenticate)
         
         self.connected = PYMUMBLE_CONN_STATE_AUTHENTICATING
+        return self.connected
         
     def loop(self):
         """
@@ -158,7 +177,7 @@ class Mumble(threading.Thread):
         last_ping = time.time()  # keep track of the last ping time
         
         # loop as long as the connection and the parent thread are alive
-        while self.connected != PYMUMBLE_CONN_STATE_NOT_CONNECTED and self.parent_thread.is_alive():
+        while self.connected not in (PYMUMBLE_CONN_STATE_NOT_CONNECTED, PYMUMBLE_CONN_STATE_FAILED) and self.parent_thread.is_alive():
             if last_ping + PYMUMBLE_PING_DELAY <= time.time():  # when it is time, send the ping
                 self.ping()
                 last_ping = time.time()
@@ -243,6 +262,8 @@ class Mumble(threading.Thread):
             mess = mumble_pb2.Reject()
             mess.ParseFromString(message)
             self.Log.debug("message: reject : %s", mess)
+            self.connected = PYMUMBLE_CONN_STATE_FAILED
+            self.connection_error = (2000, mess.reason)
             self.ready_lock.release()
             raise ConnectionRejectedError(mess.reason)
         
